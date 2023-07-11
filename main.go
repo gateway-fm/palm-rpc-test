@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	client *http.Client = &http.Client{}
+	client = &http.Client{}
 )
 
 func main() {
