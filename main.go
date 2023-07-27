@@ -2,11 +2,13 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/nsf/jsondiff"
 )
@@ -18,6 +20,7 @@ var (
 func main() {
 	host1 := flag.String("host1", "http://127.0.0.1:8545", "address of first RPC host")
 	host2 := flag.String("host2", "http://127.0.0.1:8546", "address of second RPC host")
+	consoleOut := flag.Bool("console", false, "output results to console as processing happens")
 	flag.Parse()
 
 	inputFiles, err := os.ReadDir("./input")
@@ -26,7 +29,10 @@ func main() {
 		return
 	}
 
-	compareOptions := jsondiff.DefaultConsoleOptions()
+	consoleOptions := jsondiff.DefaultConsoleOptions()
+	markdownOptions := jsondiff.DefaultJSONOptions()
+	markdownOptions.SkipMatches = true
+	var markdownOutput string
 
 	for _, inputFile := range inputFiles {
 		fmt.Printf("Processing %s\n", inputFile.Name())
@@ -56,14 +62,49 @@ func main() {
 			return
 		}
 
-		diff, report := jsondiff.Compare(res1, res2, &compareOptions)
+		// first marshall json to an RpcError struct to see if we got an error - it might be that the node
+		// does not support the call in which case comparison isn't useful
+		var possibleError PossibleError
+		err = json.Unmarshal(res1, &possibleError)
+		if err != nil {
+			fmt.Printf("Error unmarshalling response from host1: %v\n", err)
+			return
+		}
+
+		if strings.Contains(possibleError.Error.Message, "does not exist") {
+			fmt.Println("Host1 does not support this call")
+			continue
+		}
+
+		err = json.Unmarshal(res2, &possibleError)
+		if err != nil {
+			fmt.Printf("Error unmarshalling response from host2: %v\n", err)
+			return
+		}
+
+		if strings.Contains(possibleError.Error.Message, "does not exist") {
+			fmt.Println("Host2 does not support this call")
+			continue
+		}
+
+		diff, report := jsondiff.Compare(res1, res2, &consoleOptions)
 		if diff == jsondiff.FullMatch {
 			fmt.Println("Files match")
 		} else {
-			fmt.Println("!! Files do not match !!")
-			fmt.Println(report)
+			if *consoleOut {
+				fmt.Println(report)
+			}
+			fmt.Println("!!! Files do not match")
+
+			_, report = jsondiff.Compare(res1, res2, &markdownOptions)
+			markdownOutput += fmt.Sprintf("# File: %s\n", inputFile.Name())
+			markdownOutput += "```json\n"
+			markdownOutput += fmt.Sprintf("%s\n", report)
+			markdownOutput += "```\n\n\n"
 		}
 	}
+
+	_ = os.WriteFile("./output/output.md", []byte(markdownOutput), 0644)
 }
 
 func getResponse(host string, contents []byte) ([]byte, error) {
@@ -86,4 +127,13 @@ func getResponse(host string, contents []byte) ([]byte, error) {
 	}
 
 	return b, nil
+}
+
+type RpcError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
+type PossibleError struct {
+	Error RpcError `json:"error"`
 }

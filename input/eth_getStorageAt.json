@@ -1,0 +1,10 @@
+{
+	"jsonrpc":"2.0",
+	"method": "eth_getStorageAt",
+	"params": [
+		"0x109c4f2ccc82c4d77bde15f306707320294aea3f",
+		"0x0",
+		"0xc443"
+	],
+	"id": "1"
+}
