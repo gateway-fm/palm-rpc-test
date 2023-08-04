@@ -3,12 +3,14 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/nsf/jsondiff"
 )
@@ -17,11 +19,19 @@ var (
 	client = &http.Client{}
 )
 
+var (
+	consoleOptions  = jsondiff.DefaultConsoleOptions()
+	markdownOptions = jsondiff.DefaultJSONOptions()
+	consoleOut      = false
+)
+
 func main() {
 	host1 := flag.String("host1", "http://127.0.0.1:8545", "address of first RPC host")
 	host2 := flag.String("host2", "http://127.0.0.1:8546", "address of second RPC host")
-	consoleOut := flag.Bool("console", false, "output results to console as processing happens")
+	flag.BoolVar(&consoleOut, "console", false, "output results to console as processing happens")
 	flag.Parse()
+
+	markdownOptions.SkipMatches = true
 
 	inputFiles, err := os.ReadDir("./input")
 	if err != nil {
@@ -29,15 +39,13 @@ func main() {
 		return
 	}
 
-	consoleOptions := jsondiff.DefaultConsoleOptions()
-	markdownOptions := jsondiff.DefaultJSONOptions()
-	markdownOptions.SkipMatches = true
 	var markdownOutput string
 
 	for _, inputFile := range inputFiles {
-		fmt.Printf("Processing %s\n", inputFile.Name())
+		filename := inputFile.Name()
+		fmt.Printf("Processing %s\n", filename)
 
-		path := fmt.Sprintf("./input/%s", inputFile.Name())
+		path := fmt.Sprintf("./input/%s", filename)
 		file, err := os.OpenFile(path, os.O_RDONLY, 0644)
 		fileBytes, err := io.ReadAll(file)
 		if err != nil {
@@ -54,6 +62,27 @@ func main() {
 		if err != nil {
 			fmt.Printf("Error getting response from host1: %v\n", err)
 			return
+		}
+
+		// if we have a file in the expected folder then check that rather than the other node
+		// it could be specific to the new client
+		expectedFile, err := os.OpenFile(fmt.Sprintf("./expected/%s", filename), os.O_RDONLY, 0644)
+		if err != nil {
+			if !errors.Is(err, os.ErrNotExist) {
+				fmt.Printf("Error reading expected file: %v\n", err)
+				return
+			}
+		}
+		if err == nil {
+			fmt.Printf("Found expected file for %s, comparing...\n", filename)
+			// the file exists so just compare that
+			expectedBytes, err := io.ReadAll(expectedFile)
+			if err != nil {
+				fmt.Printf("Error reading expected file: %v\n", err)
+				return
+			}
+			markdownOutput += diffTheFiles(res1, expectedBytes, filename)
+			continue
 		}
 
 		res2, err := getResponse(*host2, fileBytes)
@@ -87,21 +116,9 @@ func main() {
 			continue
 		}
 
-		diff, report := jsondiff.Compare(res1, res2, &consoleOptions)
-		if diff == jsondiff.FullMatch {
-			fmt.Println("Files match")
-		} else {
-			if *consoleOut {
-				fmt.Println(report)
-			}
-			fmt.Println("!!! Files do not match")
+		markdownOutput += diffTheFiles(res1, res2, filename)
 
-			_, report = jsondiff.Compare(res1, res2, &markdownOptions)
-			markdownOutput += fmt.Sprintf("# File: %s\n", inputFile.Name())
-			markdownOutput += "```json\n"
-			markdownOutput += fmt.Sprintf("%s\n", report)
-			markdownOutput += "```\n\n\n"
-		}
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	_ = os.WriteFile("./output/output.md", []byte(markdownOutput), 0644)
@@ -110,6 +127,7 @@ func main() {
 func getResponse(host string, contents []byte) ([]byte, error) {
 	br := bytes.NewReader(contents)
 	req, err := http.NewRequest(http.MethodPost, host, br)
+	req.Header.Add("Content-Type", "application/json")
 	if err != nil {
 		return nil, err
 	}
@@ -127,6 +145,27 @@ func getResponse(host string, contents []byte) ([]byte, error) {
 	}
 
 	return b, nil
+}
+
+func diffTheFiles(res1, res2 []byte, fileName string) string {
+	output := ""
+	diff, report := jsondiff.Compare(res1, res2, &consoleOptions)
+	if diff == jsondiff.FullMatch {
+		fmt.Println("Files match")
+	} else {
+		if consoleOut {
+			fmt.Println(report)
+		}
+		fmt.Println("!!! Files do not match")
+
+		_, report = jsondiff.Compare(res1, res2, &markdownOptions)
+		output += fmt.Sprintf("# File: %s\n", fileName)
+		output += "```json\n"
+		output += fmt.Sprintf("%s\n", report)
+		output += "```\n\n\n"
+	}
+
+	return output
 }
 
 type RpcError struct {

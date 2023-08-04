@@ -1,0 +1,6 @@
+{
+  "jsonrpc":"2.0",
+  "method":"eth_feeHistory",
+  "params":["0x14", "0x1E1", [25, 75]],
+  "id":"1"
+}
