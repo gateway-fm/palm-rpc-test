@@ -2,8 +2,8 @@
   "jsonrpc": "2.0",
   "method": "zkevm_getFullBlockByHash",
   "params": [
-    "0x1dfdf08df92e852b69dbf3c7cfbb4db55d492a053985022904c326552f01a7d2",
-    false
+    "0x46181e03cb7d4fd61ab1a09f1da5490d0f1f944fb2def2945ff4be4603fa2fc9",
+    true
   ],
   "id": "1"
 }

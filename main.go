@@ -44,6 +44,7 @@ func main() {
 
 	for _, inputFile := range inputFiles {
 		filename := inputFile.Name()
+		linkedFile := strings.ReplaceAll(filename, ".json", ".md")
 		fmt.Printf("Processing %s\n", filename)
 
 		path := fmt.Sprintf("%s/%s", *folder, filename)
@@ -82,7 +83,8 @@ func main() {
 				fmt.Printf("Error reading expected file: %v\n", err)
 				return
 			}
-			markdownOutput += diffTheFiles(res1, expectedBytes, filename)
+			markdownOutput += diffTheFiles(res1, expectedBytes, filename, linkedFile)
+			writeLinkedFileOutput(res1, expectedBytes, fmt.Sprintf("./output/%s", linkedFile))
 			continue
 		}
 
@@ -117,7 +119,10 @@ func main() {
 			continue
 		}
 
-		markdownOutput += diffTheFiles(res1, res2, filename)
+		markdownOutput += diffTheFiles(res1, res2, filename, linkedFile)
+
+		// now write the outputs to a file that we can link to in the markdown
+		writeLinkedFileOutput(res1, res2, fmt.Sprintf("./output/%s", linkedFile))
 
 		time.Sleep(100 * time.Millisecond)
 	}
@@ -148,7 +153,7 @@ func getResponse(host string, contents []byte) ([]byte, error) {
 	return b, nil
 }
 
-func diffTheFiles(res1, res2 []byte, fileName string) string {
+func diffTheFiles(res1, res2 []byte, fileName, linkedFile string) string {
 	output := ""
 	diff, report := jsondiff.Compare(res1, res2, &consoleOptions)
 	if diff == jsondiff.FullMatch {
@@ -160,13 +165,28 @@ func diffTheFiles(res1, res2 []byte, fileName string) string {
 		fmt.Println("!!! Files do not match")
 
 		_, report = jsondiff.Compare(res1, res2, &markdownOptions)
-		output += fmt.Sprintf("# File: %s\n", fileName)
+		output += fmt.Sprintf("# File: [%s](%s)\n", fileName, linkedFile)
 		output += "```json\n"
 		output += fmt.Sprintf("%s\n", report)
 		output += "```\n\n\n"
 	}
 
 	return output
+}
+
+func writeLinkedFileOutput(ours, theirs []byte, filename string) {
+	out := "# Ours\n"
+	out += "```json\n"
+	out += fmt.Sprintf("%s\n", ours)
+	out += "```\n\n\n"
+	out += "# Theirs\n"
+	out += "```json\n"
+	out += fmt.Sprintf("%s\n", theirs)
+	out += "```\n\n\n"
+	err := os.WriteFile(filename, []byte(out), 0644)
+	if err != nil {
+		fmt.Printf("Error writing linked file: %v\n", err)
+	}
 }
 
 type RpcError struct {
