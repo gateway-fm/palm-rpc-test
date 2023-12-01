@@ -28,12 +28,13 @@ var (
 func main() {
 	host1 := flag.String("host1", "http://127.0.0.1:8545", "address of first RPC host")
 	host2 := flag.String("host2", "http://127.0.0.1:8546", "address of second RPC host")
+	folder := flag.String("folder", "./input", "folder containing input files")
 	flag.BoolVar(&consoleOut, "console", false, "output results to console as processing happens")
 	flag.Parse()
 
 	markdownOptions.SkipMatches = true
 
-	inputFiles, err := os.ReadDir("./input")
+	inputFiles, err := os.ReadDir(*folder)
 	if err != nil {
 		fmt.Printf("Error reading input directory: %v\n", err)
 		return
@@ -45,7 +46,7 @@ func main() {
 		filename := inputFile.Name()
 		fmt.Printf("Processing %s\n", filename)
 
-		path := fmt.Sprintf("./input/%s", filename)
+		path := fmt.Sprintf("%s/%s", *folder, filename)
 		file, err := os.OpenFile(path, os.O_RDONLY, 0644)
 		fileBytes, err := io.ReadAll(file)
 		if err != nil {
@@ -66,7 +67,7 @@ func main() {
 
 		// if we have a file in the expected folder then check that rather than the other node
 		// it could be specific to the new client
-		expectedFile, err := os.OpenFile(fmt.Sprintf("./expected/%s", filename), os.O_RDONLY, 0644)
+		expectedFile, err := os.OpenFile(fmt.Sprintf("%s-expected/%s", *folder, filename), os.O_RDONLY, 0644)
 		if err != nil {
 			if !errors.Is(err, os.ErrNotExist) {
 				fmt.Printf("Error reading expected file: %v\n", err)

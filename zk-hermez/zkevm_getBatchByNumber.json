@@ -1,0 +1,6 @@
+{
+  "jsonrpc":"2.0",
+  "method":"zkevm_getBatchByNumber",
+  "params":["0x87d2", false],
+  "id":"1"
+}
