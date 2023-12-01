@@ -1,6 +1,6 @@
 {
   "jsonrpc":"2.0",
   "method":"zkevm_isBlockVirtualized",
-  "params":[1000],
+  "params":["0x3E8"],
   "id":"1"
 }
